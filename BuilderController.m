@@ -105,7 +105,14 @@
 - (IBAction)generateFiles:(id)sender {
 	//create plist
 	NSString *encodedIpaFilename = [[[archiveIPAFilenameField stringValue] lastPathComponent] stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding]; //this isn't the most robust way to do this
-	NSString *ipaURLString = [NSString stringWithFormat:@"%@/%@", [webserverDirectoryField stringValue], encodedIpaFilename];
+	
+	NSString *appName = [encodedIpaFilename stringByDeletingPathExtension];
+	NSString *appExtension = [encodedIpaFilename pathExtension];
+	NSString *betaZipFilename = [appName stringByAppendingPathExtension:@"zip"];
+	NSString *betaIpaFilename = [[appName stringByAppendingString:@"_Beta"] stringByAppendingPathExtension:appExtension];
+	NSString *betaProvisionFilename = [appName stringByAppendingString:@"_AdHoc.mobileprovision"];
+	
+	NSString *ipaURLString = [NSString stringWithFormat:@"%@/%@", [webserverDirectoryField stringValue], betaIpaFilename];
 	NSDictionary *assetsDictionary = [NSDictionary dictionaryWithObjectsAndKeys:@"software-package", @"kind", ipaURLString, @"url", nil];
 	NSDictionary *metadataDictionary = [NSDictionary dictionaryWithObjectsAndKeys:[bundleIdentifierField stringValue], @"bundle-identifier", [bundleVersionField stringValue], @"bundle-version", @"software", @"kind", [bundleNameField stringValue], @"title", nil];
 	NSDictionary *innerManifestDictionary = [NSDictionary dictionaryWithObjectsAndKeys:[NSArray arrayWithObject:assetsDictionary], @"assets", metadataDictionary, @"metadata", nil];
@@ -116,6 +123,7 @@
 	NSString *templatePath = [[NSBundle mainBundle] pathForResource:@"index_template" ofType:@"html"];
 	NSString *htmlTemplateString = [NSString stringWithContentsOfFile:templatePath encoding:NSUTF8StringEncoding error:nil];
 	htmlTemplateString = [htmlTemplateString stringByReplacingOccurrencesOfString:@"[BETA_NAME]" withString:[bundleNameField stringValue]];
+	htmlTemplateString = [htmlTemplateString stringByReplacingOccurrencesOfString:@"[BETA_ZIP_NAME]" withString:betaZipFilename];
 	htmlTemplateString = [htmlTemplateString stringByReplacingOccurrencesOfString:@"[BETA_PLIST]" withString:[NSString stringWithFormat:@"%@/%@", [webserverDirectoryField stringValue], @"manifest.plist"]];
 	
 	//ask for save location	
@@ -138,7 +146,7 @@
 		NSError *fileCopyError;
 		NSFileManager *fileManager = [NSFileManager defaultManager];
 		NSURL *ipaSourceURL = [NSURL fileURLWithPath:[archiveIPAFilenameField stringValue]];
-		NSURL *ipaDestinationURL = [saveDirectoryURL URLByAppendingPathComponent:[[archiveIPAFilenameField stringValue] lastPathComponent]];
+		NSURL *ipaDestinationURL = [saveDirectoryURL URLByAppendingPathComponent:betaIpaFilename];
 		BOOL copiedIPAFile = [fileManager copyItemAtURL:ipaSourceURL toURL:ipaDestinationURL error:&fileCopyError];
 		if (!copiedIPAFile) {
 			NSLog(@"Error Copying IPA File: %@", fileCopyError);
@@ -150,9 +158,10 @@
 		
 		//Create Archived Version for 3.0 Apps
 		ZipArchive* zip = [[ZipArchive alloc] init];
-		BOOL ret = [zip CreateZipFile2:[[saveDirectoryURL path] stringByAppendingPathComponent:@"beta_archive.zip"]];
-		ret = [zip addFileToZip:[archiveIPAFilenameField stringValue] newname:@"application.ipa"];
-		ret = [zip addFileToZip:mobileProvisionFilePath newname:@"beta_provision.mobileprovision"];
+		
+		BOOL ret = [zip CreateZipFile2:[[saveDirectoryURL path] stringByAppendingPathComponent:betaZipFilename]];
+		ret = [zip addFileToZip:[archiveIPAFilenameField stringValue] newname:betaIpaFilename];
+		ret = [zip addFileToZip:mobileProvisionFilePath newname:betaProvisionFilename];
 		if(![zip CloseZipFile2]) {
 			NSLog(@"Error Creating 3.x Zip File");
 		}
